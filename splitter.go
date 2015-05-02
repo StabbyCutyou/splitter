@@ -4,7 +4,7 @@ import (
 	"flag"
 	"github.com/Sirupsen/logrus"
 	"github.com/StabbyCutyou/splitter/config"
-	"github.com/StabbyCutyou/splitter/connection_manager"
+	"github.com/StabbyCutyou/splitter/server"
 )
 
 const VERSION = "0.0.1"
@@ -22,5 +22,12 @@ func main() {
 	// Begin listening
 
 	// main thread now blocked
-	connection_manager.StartReadListening(cfg.Network.ListenerPort, cfg.Network.WriterPort)
+	server.StartReadListening(cfg.Network.ListenerPort, cfg.Network.WriterPort, BumpBytes)
+}
+
+func BumpBytes(bytes []byte) []byte {
+	for i, b := range bytes {
+		bytes[i] = b + byte(1)
+	}
+	return bytes
 }

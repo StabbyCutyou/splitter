@@ -1,4 +1,4 @@
-package connection_manager
+package server
 
 import (
 	"bufio"
@@ -7,8 +7,9 @@ import (
 	"net"
 	"strconv"
 	"sync"
-	"syscall"
 )
+
+type SplitterMap func([]byte) []byte
 
 type ConnectionList struct {
 	sync.RWMutex
@@ -21,6 +22,15 @@ func (cl *ConnectionList) AddConnection(conn net.Conn) {
 	cl.connections = append(cl.connections, conn)
 }
 
+func (cl *ConnectionList) removeConnectionAt(i int) {
+	// Can only be entered while lock is acquired by Broadcast
+	// Close it first
+	logrus.Infof("REMOVING %d", i)
+	cl.connections[i].Close()
+	// Remove it
+	cl.connections = append(cl.connections[:i], cl.connections[i+1:]...)
+}
+
 func NewConnectionList() *ConnectionList {
 	return &ConnectionList{
 		connections: make([]net.Conn, 0),
@@ -30,21 +40,18 @@ func NewConnectionList() *ConnectionList {
 func (cl *ConnectionList) Broadcast(bytes []byte) {
 	cl.Lock()
 	defer cl.Unlock()
-	for _, conn := range cl.connections {
+	for i, conn := range cl.connections {
 		num, err := conn.Write(bytes)
 		if num == 0 {
-			if err == syscall.EINVAL {
+			if err != nil {
 				// connection closed, bail?
+				defer cl.removeConnectionAt(i)
 			}
-		}
-
-		if err != nil {
-			logrus.Error(err)
 		}
 	}
 }
 
-func StartReadListening(readPort int, writePort int) {
+func StartReadListening(readPort int, writePort int, mapOperation SplitterMap) {
 	// Create buffer to hold data
 	queue := lane.NewQueue()
 	// Start listening for writer destinations
@@ -64,7 +71,7 @@ func StartReadListening(readPort int, writePort int) {
 			logrus.Error(err)
 		} else {
 			logrus.Debug("Accepted Connection...")
-			go HandleReadConnection(conn, queue, writePort)
+			go HandleReadConnection(conn, queue, writePort, mapOperation)
 		}
 	}
 }
@@ -90,7 +97,7 @@ func StartWriteListening(readQueue *lane.Queue, writePort int) {
 	}
 }
 
-func HandleReadConnection(conn net.Conn, readQueue *lane.Queue, writePort int) {
+func HandleReadConnection(conn net.Conn, readQueue *lane.Queue, writePort int, mapOperation SplitterMap) {
 
 	buffConn := bufio.NewReaderSize(conn, 1024)
 	buffer := make([]byte, 1024)
@@ -101,7 +108,7 @@ func HandleReadConnection(conn net.Conn, readQueue *lane.Queue, writePort int) {
 		// Output the content of the bytes to the queue
 		if bytes > 0 {
 			readQueue.Enqueue(buffer[:bytes])
-			logrus.Info(string(buffer[:bytes]))
+			logrus.Info(string(mapOperation(buffer[:bytes])[:bytes]))
 		}
 
 		if bytes == 0 {
