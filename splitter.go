@@ -22,7 +22,7 @@ func main() {
 	// Begin listening
 
 	// main thread now blocked
-	server.StartReadListening(cfg.Network.ListenerPort, cfg.Network.WriterPort, BumpBytes)
+	server.StartReadListening(cfg.Network.ListenerPort, cfg.Network.WriterPort, cfg.Writing.WriteToList, BumpBytes)
 }
 
 func BumpBytes(bytes []byte) []byte {

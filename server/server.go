@@ -51,11 +51,11 @@ func (cl *ConnectionList) Broadcast(bytes []byte) {
 	}
 }
 
-func StartReadListening(readPort int, writePort int, mapOperation SplitterMap) {
+func StartReadListening(readPort int, writePort int, defaultWriters []string, mapOperation SplitterMap) {
 	// Create buffer to hold data
 	queue := lane.NewQueue()
 	// Start listening for writer destinations
-	go StartWriteListening(queue, writePort)
+	go StartWriteListening(queue, defaultWriters, writePort)
 
 	socket, err := net.Listen("tcp", ":"+strconv.Itoa(readPort))
 	if err != nil {
@@ -76,12 +76,25 @@ func StartReadListening(readPort int, writePort int, mapOperation SplitterMap) {
 	}
 }
 
-func StartWriteListening(readQueue *lane.Queue, writePort int) {
+func StartWriteListening(readQueue *lane.Queue, defaultWriters []string, writePort int) {
 	cList := NewConnectionList()
 	socket, err := net.Listen("tcp", ":"+strconv.Itoa(writePort))
 	if err != nil {
 		logrus.Error(err)
 	}
+	// Begin trying to connect to default endpoints
+	for _, writer := range defaultWriters {
+		logrus.Debug("Opening connections to endpoints...")
+		conn, err := net.Dial("tcp", writer)
+		if err != nil {
+			logrus.Error(err)
+		} else {
+			logrus.Debug("Accepted Connection...")
+			cList.AddConnection(conn)
+			go HandleWriteConnections(cList, readQueue)
+		}
+	}
+
 	for {
 		// Begin trying to accept connections
 		logrus.Debug("Awaiting Connection...")
