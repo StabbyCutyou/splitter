@@ -7,7 +7,10 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"time"
 )
+
+var bytesSeen = 0
 
 type SplitterMap func([]byte) []byte
 
@@ -54,6 +57,7 @@ func (cl *ConnectionList) Broadcast(bytes []byte) {
 func StartReadListening(readPort int, writePort int, defaultWriters []string, mapOperation SplitterMap) {
 	// Create buffer to hold data
 	queue := lane.NewQueue()
+	MonitorServer(queue)
 	// Start listening for writer destinations
 	go StartWriteListening(queue, defaultWriters, writePort)
 
@@ -111,7 +115,6 @@ func StartWriteListening(readQueue *lane.Queue, defaultWriters []string, writePo
 }
 
 func HandleReadConnection(conn net.Conn, readQueue *lane.Queue, writePort int, mapOperation SplitterMap) {
-
 	buffConn := bufio.NewReaderSize(conn, 1024)
 	buffer := make([]byte, 1024)
 	for {
@@ -121,7 +124,7 @@ func HandleReadConnection(conn net.Conn, readQueue *lane.Queue, writePort int, m
 		// Output the content of the bytes to the queue
 		if bytes > 0 {
 			readQueue.Enqueue(buffer[:bytes])
-			logrus.Info(string(mapOperation(buffer[:bytes])[:bytes]))
+			bytesSeen += bytes
 		}
 
 		if bytes == 0 {
@@ -139,6 +142,19 @@ func HandleReadConnection(conn net.Conn, readQueue *lane.Queue, writePort int, m
 			break
 		}
 	}
+}
+
+func MonitorServer(queue *lane.Queue) {
+	scheduler := time.NewTicker(5 * time.Second)
+	go func(queue *lane.Queue) {
+		for {
+			select {
+			case <-scheduler.C:
+				logrus.Infof("BYTES SEEN: %d", bytesSeen)
+				logrus.Infof("QUEUE SIZE: %d", queue.Size())
+			}
+		}
+	}(queue)
 }
 
 func HandleWriteConnections(cList *ConnectionList, readQueue *lane.Queue) {

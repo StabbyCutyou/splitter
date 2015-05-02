@@ -26,8 +26,8 @@ func main() {
 }
 
 func BumpBytes(bytes []byte) []byte {
-	for i, b := range bytes {
-		bytes[i] = b + byte(1)
-	}
+	//for i, b := range bytes {
+	//	bytes[i] = b + byte(1)
+	//}
 	return bytes
 }
