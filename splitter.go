@@ -10,6 +10,7 @@ import (
 const VERSION = "0.0.1"
 
 func main() {
+	logrus.SetLevel(logrus.DebugLevel)
 	logrus.Infof("Splitter version %s booting...", VERSION)
 	// pre-config
 	config_file := flag.String("c", "./config/splitter.cfg", "location of config file")
